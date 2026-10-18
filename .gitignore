@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+# Secrets & local env
+.env
+*.pem
+*.key
+id_*
+# Cloud credentials & service-account keys (never commit)
+*-sa*.json
+gcp-*.json
+.aws/
+.azure/
+# Case artifacts / evidence (never commit real scan output)
+cases/
+evidence/
+# OS
+.DS_Store

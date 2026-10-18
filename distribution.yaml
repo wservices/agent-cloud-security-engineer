@@ -1,0 +1,61 @@
+# Hermes profile distribution manifest for the Cloud Security Engineer role.
+# Install:  hermes profile install https://github.com/wservices/agent-cloud-security-engineer.git
+# Fields validated against hermes_cli/profile_distribution.py (Hermes 0.21.x).
+
+name: cloud-security-engineer
+version: 0.1.0
+description: >-
+  Cloud security engineer: hardens posture across AWS, Azure, and GCP. Runs
+  read-only CSPM scans (prowler / ScoutSuite), reviews IAM for least privilege,
+  checks network exposure (security groups / NSGs) and public storage, audits
+  secret and key management (KMS / Key Vault), and assesses CIS Foundations
+  benchmark compliance — then writes a prioritized posture report whose fixes are
+  proposed as Infrastructure-as-Code or console steps. Strictly read-only and
+  advisory: it uses read-only cloud credentials and never mutates cloud
+  resources. Escalates to the Security Team Lead.
+  (Kanban decomposer: routes cloud-posture, CSPM, cloud-IAM, cloud-exposure,
+  KMS/secrets, and CIS-benchmark tasks here.)
+hermes_requires: ">=0.21.0"
+author: Pascal (pascal), Hermes Agent
+license: MIT
+
+# config.yaml is intentionally NOT distribution-owned, so installing this role
+# never overwrites the user's model/provider choice. The role layers SOUL.md,
+# skills/, and the env vars below onto the user's base config.
+distribution_owned:
+  - SOUL.md
+  - skills
+  - distribution.yaml
+  - changelogs
+
+# Credentials the role needs — ALL read-only. Hermes generates a .env.EXAMPLE
+# from these; the user fills a real .env (never committed) and forwards the names
+# via docker_forward_env into the Kali sandbox. Values are never logged. Use
+# least-privilege, read-only cloud principals only (AWS SecurityAudit/ViewOnly,
+# Azure Reader, GCP Viewer) — this role performs no cloud writes.
+env_requires:
+  - name: AWS_PROFILE
+    required: false
+    description: "Named AWS CLI profile for READ-ONLY API queries (read-only IAM principal)"
+  - name: AWS_ACCESS_KEY_ID
+    required: false
+    description: "Access key ID of a READ-ONLY AWS principal (SecurityAudit/ViewOnlyAccess); never a write/admin key"
+  - name: AWS_SECRET_ACCESS_KEY
+    required: false
+    description: "Secret key for the READ-ONLY AWS principal above; never printed, logged, or committed"
+  - name: AWS_REGION
+    required: false
+    default: us-east-1
+    description: "Default region for the READ-ONLY AWS session; scanners still enumerate all regions"
+  - name: AZURE_TENANT_ID
+    required: false
+    description: "Azure AD tenant ID for the READ-ONLY (Reader-role) service principal"
+  - name: AZURE_CLIENT_ID
+    required: false
+    description: "App/client ID of the READ-ONLY Azure service principal (Reader role only)"
+  - name: AZURE_CLIENT_SECRET
+    required: false
+    description: "Client secret for the READ-ONLY Azure (Reader) service principal; never printed or committed"
+  - name: GOOGLE_APPLICATION_CREDENTIALS
+    required: false
+    description: "Path to a GCP service-account key file with READ-ONLY (Viewer) role; mounted, never committed"

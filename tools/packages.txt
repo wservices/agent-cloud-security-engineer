@@ -1,0 +1,10 @@
+# cloud-security-engineer role tool layer (APT). This role drives cloud CLIs and
+# CSPM scanners that are mostly NOT apt packages — see tools/README.md for az,
+# gcloud, prowler, and scoutsuite (installed via the vendor repos / pip). Listed
+# here are only the apt-installable tools. ALL cloud access uses READ-ONLY
+# credentials (AWS ViewOnly/SecurityAudit, Azure Reader, GCP Viewer).
+#
+# Core (apt):
+awscli            # aws CLI — read-only AWS API queries (describe/list/get)
+jq                # parse/filter scanner + API JSON output
+ripgrep           # fast search across findings, evidence, and fix drafts (provides rg)
