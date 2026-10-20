@@ -1,12 +1,12 @@
 ---
 name: cloud-posture-review-cspm
 description: Run read-only CSPM scans and triage cloud findings.
-version: 0.1.0
+version: 0.2.0
 author: Pascal (pascal), Hermes Agent
 license: MIT
 platforms: [linux]
 prerequisites:
-  commands: [prowler, scout, aws, jq]
+  commands: [prowler, scout, aws, jq, python3]
 metadata:
   hermes:
     tags: [cspm, prowler, scoutsuite, aws, azure, gcp, posture]
@@ -46,6 +46,9 @@ Confirm the identity is read-only first, then scan into the case directory, e.g.
 `terminal(command="aws sts get-caller-identity --query Arn --output text", timeout=30)`
 then
 `terminal(command="prowler aws -M json-ocsf -o cases/<id>/evidence/prowler --status FAIL", timeout=1800)`.
+Normalize and summarize the scanner output offline with the bundled parser, e.g.
+`terminal(command="python3 scripts/cspm_findings_parse.py cases/<id>/evidence/prowler/output.ocsf.json --json", timeout=60)`
+(it accepts Prowler native/OCSF JSON and NDJSON).
 
 ## Quick Reference
 
@@ -68,6 +71,10 @@ scout gcp   --report-dir cases/<id>/evidence/scoutsuite --no-browser
 # triage: top failing checks by severity
 jq -r 'select(.status_code=="FAIL") | [.severity,.finding_info.title] | @tsv' \
   cases/<id>/evidence/prowler/*.ocsf.json | sort | uniq -c | sort -rn
+
+# offline: normalize + summarize by service/severity/status (pass vs fail)
+python3 scripts/cspm_findings_parse.py cases/<id>/evidence/prowler/output.ocsf.json --json
+python3 scripts/cspm_findings_parse.py cases/<id>/evidence/prowler/output.ocsf.json --status FAIL
 ```
 
 ## Procedure
@@ -109,6 +116,9 @@ jq -r 'select(.status_code=="FAIL") | [.severity,.finding_info.title] | @tsv' \
 
 - A scanner JSON report exists under `cases/<id>/evidence/` with a SHA256 hash
   and UTC timestamp.
+- `python3 scripts/cspm_findings_parse.py <report>.json --json` returns a summary
+  with correct PASS/FAIL and per-service counts; `python3 -m pytest tests -q`
+  covers Prowler-native, OCSF, and NDJSON inputs offline.
 - `jq` triage prints a severity-ranked finding list without error.
 - The caller identity recorded for the run is a read-only principal.
 - No cloud resource was created, modified, or deleted (only `get`/`list`/

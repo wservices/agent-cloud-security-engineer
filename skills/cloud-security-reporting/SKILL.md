@@ -1,12 +1,12 @@
 ---
 name: cloud-security-reporting
 description: Write a cloud posture report with prioritized fixes.
-version: 0.1.0
+version: 0.2.0
 author: Pascal (pascal), Hermes Agent
 license: MIT
 platforms: [linux]
 prerequisites:
-  commands: [jq, rg]
+  commands: [jq, rg, python3]
 metadata:
   hermes:
     tags: [reporting, posture, remediation, iac, least-privilege]
@@ -40,7 +40,10 @@ mutates cloud state.
 
 Aggregate the stored findings and write the report into the case directory, e.g.
 `terminal(command="jq -s 'add' cases/<id>/evidence/*/*.ocsf.json > cases/<id>/all-findings.json", timeout=60)`
-then compose `cases/<id>/report.md` from the sections below.
+then build a prioritized Markdown report offline from the normalized findings,
+e.g.
+`terminal(command="python3 scripts/cloud_report_build.py cases/<id>/evidence/normalized.json --title 'AWS posture' --as-of 2026-10-20 -o cases/<id>/report.md", timeout=60)`
+and expand it with the sections below.
 
 ## Quick Reference
 
@@ -54,6 +57,9 @@ jq -r 'select(.status_code=="FAIL" and (.severity=="Critical" or .severity=="Hig
   cases/<id>/evidence/*/*.ocsf.json | sort
 # sanity-check that no draft fix contains a plaintext secret before reporting
 rg -n -i 'AKIA[0-9A-Z]{16}|secret|password|BEGIN .*PRIVATE KEY' cases/<id>/fixes/ || echo "clean"
+# offline: build a severity-ranked, service-grouped Markdown report
+python3 scripts/cloud_report_build.py cases/<id>/evidence/normalized.json \
+  --title "AWS posture" --as-of 2026-10-20 -o cases/<id>/report.md
 # render to PDF (companion skill)
 pandoc cases/<id>/report.md -o cases/<id>/report.pdf --pdf-engine=wkhtmltopdf
 ```
@@ -99,6 +105,10 @@ pandoc cases/<id>/report.md -o cases/<id>/report.pdf --pdf-engine=wkhtmltopdf
 
 - `cases/<id>/report.md` exists with an executive summary, ranked findings (each
   with evidence + a proposed fix), and a prioritized remediation plan.
+- `python3 scripts/cloud_report_build.py <normalized>.json` renders Markdown
+  grouped by service and ranked by severity (critical services first), excluding
+  PASS findings by default; `python3 -m pytest tests -q` covers the rendering
+  offline.
 - The `rg` secret sanity-check reports `clean`.
 - No fix in the report was applied; the command log shows reporting/aggregation
   only.

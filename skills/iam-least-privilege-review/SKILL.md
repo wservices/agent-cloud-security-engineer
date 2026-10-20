@@ -1,12 +1,12 @@
 ---
 name: iam-least-privilege-review
 description: Find over-permissive IAM and propose least privilege.
-version: 0.1.0
+version: 0.2.0
 author: Pascal (pascal), Hermes Agent
 license: MIT
 platforms: [linux]
 prerequisites:
-  commands: [aws, az, gcloud, jq]
+  commands: [aws, az, gcloud, jq, python3]
 metadata:
   hermes:
     tags: [iam, least-privilege, aws, azure, gcp, authorization]
@@ -42,7 +42,10 @@ console steps for a human to apply.
 
 Enumerate principals and their effective permissions read-only, e.g.
 `terminal(command="aws iam get-account-authorization-details > cases/<id>/evidence/aws-iam-auth-details.json", timeout=120)`
-then analyze with `jq`; propose fixes as draft IaC under `cases/<id>/fixes/`.
+then audit each exported policy document offline with the bundled auditor, e.g.
+`terminal(command="python3 scripts/iam_policy_audit.py cases/<id>/evidence/policy.json --json", timeout=60)`
+which flags `*`/`NotAction`/condition-less Allows and privilege-escalation
+actions. Propose fixes as draft IaC under `cases/<id>/fixes/`.
 
 ## Quick Reference
 
@@ -66,6 +69,11 @@ gcloud projects get-iam-policy "$PROJECT" --format=json > cases/<id>/evidence/gc
 jq -r '.bindings[] | select(.role=="roles/owner" or .role=="roles/editor"
   or (.members|index("allUsers")) or (.members|index("allAuthenticatedUsers")))' \
   cases/<id>/evidence/gcp-iam-policy.json
+
+# offline: export one policy document (read-only) then audit it
+aws iam get-policy-version --policy-arn <arn> --version-id <v> \
+  --query 'PolicyVersion.Document' --output json > cases/<id>/evidence/policy.json
+python3 scripts/iam_policy_audit.py cases/<id>/evidence/policy.json --json
 ```
 
 ## Procedure
@@ -108,6 +116,9 @@ jq -r '.bindings[] | select(.role=="roles/owner" or .role=="roles/editor"
 ## Verification
 
 - An IAM snapshot per in-scope cloud exists under `cases/<id>/evidence/`.
+- `python3 scripts/iam_policy_audit.py cases/<id>/evidence/policy.json` returns
+  findings (exit 1) on an over-permissive document and none (exit 0) on a scoped,
+  conditioned one; `python3 -m pytest tests -q` covers both offline.
 - Each over-permissive finding has a principal, scope, and a drafted
   least-privilege fix under `cases/<id>/fixes/`.
 - The command log contains only `get`/`list`/`describe` IAM calls — no mutations.

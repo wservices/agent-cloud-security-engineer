@@ -1,12 +1,12 @@
 ---
 name: secrets-and-key-management-review
 description: Review secret exposure, key rotation, KMS usage.
-version: 0.1.0
+version: 0.2.0
 author: Pascal (pascal), Hermes Agent
 license: MIT
 platforms: [linux]
 prerequisites:
-  commands: [aws, az, gcloud, jq]
+  commands: [aws, az, gcloud, jq, python3]
 metadata:
   hermes:
     tags: [secrets, kms, key-vault, rotation, encryption, aws, azure, gcp]
@@ -43,8 +43,10 @@ key or secret.
 
 Enumerate key and secret *metadata* read-only, e.g.
 `terminal(command="aws kms list-keys --output json > cases/<id>/evidence/aws-kms-keys.json", timeout=60)`
-then inspect rotation status and key policies with `jq`. Do not call any
-`get-secret-value` / `show --query value` operation.
+then audit the rotation metadata offline with the bundled auditor, e.g.
+`terminal(command="python3 scripts/key_rotation_audit.py cases/<id>/evidence/key-inventory.json --max-age-days 365 --json", timeout=60)`
+which flags rotation-disabled, stale/never-rotated, and wildcard key policies. Do
+not call any `get-secret-value` / `show --query value` operation.
 
 ## Quick Reference
 
@@ -68,6 +70,11 @@ done
 # GCP — Cloud KMS keys + rotation period/schedule
 gcloud kms keys list --location=global --keyring=<ring> \
   --format='table(name,rotationPeriod,nextRotationTime,primary.state)'
+
+# offline: audit rotation METADATA (never key material) from a key inventory
+#   inventory entry: {key_id, created, last_rotated, rotation_enabled, policy}
+python3 scripts/key_rotation_audit.py cases/<id>/evidence/key-inventory.json \
+  --max-age-days 365 --json
 ```
 
 ## Procedure
@@ -109,6 +116,10 @@ gcloud kms keys list --location=global --keyring=<ring> \
 
 - Key/secret metadata inventories exist under `cases/<id>/evidence/` and contain
   **no** secret values.
+- `python3 scripts/key_rotation_audit.py <inventory>.json --max-age-days 365`
+  flags rotation-disabled/stale and wildcard key policies (exit 1) and returns
+  nothing (exit 0) for a rotated, scoped key; it reads rotation METADATA only,
+  never key material. `python3 -m pytest tests -q` covers both offline.
 - Each finding records rotation status / scope / encryption state and a proposed
   fix.
 - The command log contains no `get-secret-value`, no key/secret mutation, and

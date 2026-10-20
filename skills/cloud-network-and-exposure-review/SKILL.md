@@ -1,12 +1,12 @@
 ---
 name: cloud-network-and-exposure-review
 description: Review public exposure, security groups, storage.
-version: 0.1.0
+version: 0.2.0
 author: Pascal (pascal), Hermes Agent
 license: MIT
 platforms: [linux]
 prerequisites:
-  commands: [aws, az, gcloud, jq]
+  commands: [aws, az, gcloud, jq, python3]
 metadata:
   hermes:
     tags: [network, exposure, security-groups, nsg, storage, aws, azure, gcp]
@@ -40,7 +40,9 @@ tightening as IaC/console steps, but never edits a rule, ACL, or bucket policy.
 
 Enumerate exposure read-only per cloud, e.g.
 `terminal(command="aws ec2 describe-security-groups --output json > cases/<id>/evidence/aws-sgs.json", timeout=120)`
-then filter for `0.0.0.0/0` ingress and public storage with `jq`.
+then flag world-open ingress offline with the bundled analyzer, e.g.
+`terminal(command="python3 scripts/sg_exposure.py cases/<id>/evidence/aws-sgs.json --json", timeout=60)`
+and review public storage with `jq`.
 
 ## Quick Reference
 
@@ -70,6 +72,9 @@ jq -r '.[] | select(.direction=="INGRESS" and (.sourceRanges|index("0.0.0.0/0"))
   | [.name,(.allowed|tostring)] | @tsv' cases/<id>/evidence/gcp-fw.json
 # GCP — buckets granting allUsers / allAuthenticatedUsers
 gcloud storage buckets list --format='value(name)'
+
+# offline: rank world-open (0.0.0.0/0, ::/0) ingress from an SG export
+python3 scripts/sg_exposure.py cases/<id>/evidence/aws-sgs.json --json
 ```
 
 ## Procedure
@@ -110,6 +115,10 @@ gcloud storage buckets list --format='value(name)'
 ## Verification
 
 - Exported SG/NSG/firewall and storage state exists under `cases/<id>/evidence/`.
+- `python3 scripts/sg_exposure.py cases/<id>/evidence/aws-sgs.json` flags
+  `0.0.0.0/0`/`::/0` ingress (critical on 22/3389, high on db ports; exit 1) and
+  returns nothing (exit 0) for internal-only rules; `python3 -m pytest tests -q`
+  covers both offline.
 - Each exposure finding lists the resource, the open ports/public setting, and a
   proposed tightening fix.
 - The command log contains only read-only enumeration calls — no rule, ACL, or

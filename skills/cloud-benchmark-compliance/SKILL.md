@@ -1,12 +1,12 @@
 ---
 name: cloud-benchmark-compliance
 description: Assess cloud posture against CIS Foundations.
-version: 0.1.0
+version: 0.2.0
 author: Pascal (pascal), Hermes Agent
 license: MIT
 platforms: [linux]
 prerequisites:
-  commands: [prowler, scout, jq]
+  commands: [prowler, scout, jq, python3]
 metadata:
   hermes:
     tags: [cis, compliance, benchmark, well-architected, aws, azure, gcp]
@@ -40,7 +40,10 @@ changes configuration to make a control pass.
 
 Run the scanner in CIS-compliance mode read-only, e.g.
 `terminal(command="prowler aws --compliance cis_3.0_aws -M json-ocsf -o cases/<id>/evidence/cis", timeout=1800)`
-then summarize pass/fail per control with `jq`.
+then normalize the findings (`cspm_findings_parse.py`) and map them to a CIS
+control catalog offline, e.g.
+`terminal(command="python3 scripts/benchmark_map.py --findings cases/<id>/evidence/normalized.json --catalog cases/<id>/cis_aws.yaml --json", timeout=60)`
+for per-control pass/fail and overall coverage/compliance %.
 
 ## Quick Reference
 
@@ -61,6 +64,12 @@ jq -r '[.status_code] | @tsv' cases/<id>/evidence/cis/*.ocsf.json | sort | uniq 
 jq -r 'select(.status_code=="FAIL")
   | [(.unmapped.compliance // .finding_info.title),.finding_info.title] | @tsv' \
   cases/<id>/evidence/cis/*.ocsf.json | sort -u
+
+# offline: normalize findings, then map to a CIS catalog -> coverage/compliance %
+python3 scripts/cspm_findings_parse.py cases/<id>/evidence/cis/output.ocsf.json --json \
+  > cases/<id>/evidence/normalized.json
+python3 scripts/benchmark_map.py --findings cases/<id>/evidence/normalized.json \
+  --catalog cases/<id>/cis_aws.yaml --min-compliance 80
 ```
 
 ## Procedure
@@ -103,6 +112,11 @@ jq -r 'select(.status_code=="FAIL")
 
 - A versioned CIS compliance report exists under `cases/<id>/evidence/` with a
   SHA256 hash and UTC timestamp.
+- `python3 scripts/benchmark_map.py --findings <normalized>.json --catalog
+  <cis>.yaml --json` reports per-control pass/fail plus overall coverage and
+  compliance %, and exits 1 when below `--min-compliance`; `python3 -m pytest
+  tests -q` covers the mapping offline. (Catalog: `controls:` with `id`, `title`,
+  `checks: [<prowler check ids>]`; an empty `checks` list marks a manual control.)
 - A per-section pass/fail summary and a failed-control list with CIS ids are
   produced.
 - Each failed control has a proposed remediation; no configuration was changed.
